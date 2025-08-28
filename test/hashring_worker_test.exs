@@ -183,7 +183,7 @@ defmodule HashRing.WorkerTest do
       # Low weight ring should have higher deviation from ideal 50%
       assert deviation_low > deviation_high
 
-      # More specfically, low weight should be noticeably uneven
+      # More specifically, low weight should be noticeably uneven
       assert deviation_low > 0.1
       assert deviation_high < 0.015
     end
