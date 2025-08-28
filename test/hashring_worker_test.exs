@@ -177,8 +177,8 @@ defmodule HashRing.WorkerTest do
       dist_high = distribute_keys(pid_high, sample_size)
 
       # Calculate how far from perfect 50% each node is
-      deviation_low = abs(dist_low[Node.self()] / sample_size - 0.5) |> dbg()
-      deviation_high = abs(dist_high[Node.self()] / sample_size - 0.5) |> dbg()
+      deviation_low = abs(dist_low[Node.self()] / sample_size - 0.5)
+      deviation_high = abs(dist_high[Node.self()] / sample_size - 0.5)
 
       # Low weight ring should have higher deviation from ideal 50%
       assert deviation_low > deviation_high
