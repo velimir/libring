@@ -1,5 +1,5 @@
 defmodule HashRing.WorkerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   describe "when the given node_type is :visible" do
     setup do
