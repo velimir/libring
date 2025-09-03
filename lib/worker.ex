@@ -76,7 +76,8 @@ defmodule HashRing.Worker do
         {:read_concurrency, true}
       ])
 
-    ring = HashRing.new()
+    algorithm = Keyword.get(options, :algorithm, HashRing.HashAlgorithm.Phash2)
+    ring = HashRing.new(algorithm: algorithm)
 
     node_weight = Keyword.get(options, :node_weight, 128)
     monitor_nodes? = Keyword.get(options, :monitor_nodes, false)

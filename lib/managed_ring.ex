@@ -28,7 +28,8 @@ defmodule HashRing.Managed do
           node_blacklist: pattern_list,
           node_whitelist: pattern_list,
           node_type: :all | :hidden | :visible,
-          node_weight: pos_integer
+          node_weight: pos_integer,
+          algorithm: module()
         ]
 
   @type child_spec_option ::
@@ -44,6 +45,7 @@ defmodule HashRing.Managed do
           | {:node_blacklist, pattern_list}
           | {:node_whitelist, pattern_list}
           | {:node_weight, pos_integer}
+          | {:algorithm, module()}
 
   @type child_spec_options :: [child_spec_option()]
 
@@ -54,7 +56,8 @@ defmodule HashRing.Managed do
     :node_blacklist,
     :node_whitelist,
     :node_type,
-    :node_weight
+    :node_weight,
+    :algorithm
   ]
 
   @spec child_spec(child_spec_options) :: Supervisor.child_spec()
@@ -97,6 +100,8 @@ defmodule HashRing.Managed do
     nodes added automatically when `monitor_nodes` is `true`, and nodes added manually via
     `add_node/2` and `add_nodes/2` APIs (but not those with explicit weights like `add_node/3`
     or `{node, weight}` tuples). Defaults to `128`.
+  * `algorithm: module` - The hash algorithm module to use. Must implement the
+    `HashRing.HashAlgorithm` behaviour. Defaults to `HashRing.HashAlgorithm.Phash2`.
 
   An error is returned if the ring already exists or if bad ring options are provided.
 
@@ -106,11 +111,16 @@ defmodule HashRing.Managed do
       ...> HashRing.Managed.key_to_node(:test1, :foo)
       "a"
 
-      iex> {:ok, pid} = HashRing.Managed.new(:test2)
-      ...> {:error, {:already_started, existing_pid}} = HashRing.Managed.new(:test2)
+      iex> {:ok, _pid} = HashRing.Managed.new(:test2, [algorithm: HashRing.HashAlgorithm.Murmur])
+      ...> HashRing.Managed.add_node(:test2, "node1")
+      ...> HashRing.Managed.key_to_node(:test2, "key1")
+      "node1"
+
+      iex> {:ok, pid} = HashRing.Managed.new(:test3)
+      ...> {:error, {:already_started, existing_pid}} = HashRing.Managed.new(:test3)
       ...> pid == existing_pid
       true
-      iex> HashRing.Managed.new(:test3, [nodes: "a"])
+      iex> HashRing.Managed.new(:test4, [nodes: "a"])
       ** (ArgumentError) {:nodes, "a"} is an invalid option for `HashRing.Managed.new/2`
 
   """
@@ -131,6 +141,7 @@ defmodule HashRing.Managed do
             :node_whitelist when is_list(value) -> false
             :node_type when value in [:all, :hidden, :visible] -> false
             :node_weight when is_integer(value) and value > 0 -> false
+            :algorithm when is_atom(value) -> false
             _ -> true
           end
       end)

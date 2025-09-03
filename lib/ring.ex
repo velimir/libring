@@ -14,17 +14,21 @@ defmodule HashRing do
     this mechanism is what creates the ring-like topology.
   - When nodes are added/removed from the ring, only a small subset of keys must be reassigned.
   """
-  defstruct ring: :gb_trees.empty(), nodes: []
+  defstruct ring: :gb_trees.empty(), nodes: [], algorithm: HashRing.HashAlgorithm.Phash2
 
   @type t :: %__MODULE__{
           ring: :gb_trees.tree(),
-          nodes: [term()]
+          nodes: [term()],
+          algorithm: module()
         }
 
-  @hash_range trunc(:math.pow(2, 32) - 1)
 
   @doc """
   Creates a new hash ring structure, with no nodes added yet.
+
+  ## Options
+
+    * `:algorithm` - The hash algorithm module to use (default: `HashRing.HashAlgorithm.Phash2`)
 
   ## Examples
 
@@ -33,9 +37,28 @@ defmodule HashRing do
       ...> HashRing.key_to_node(ring, {:complex, "key"})
       "a"
 
+      iex> ring = HashRing.new(algorithm: HashRing.HashAlgorithm.Phash2)
+      ...> ring.algorithm
+      HashRing.HashAlgorithm.Phash2
+
+      iex> ring = HashRing.new(algorithm: HashRing.HashAlgorithm.Murmur)
+      ...> ring.algorithm
+      HashRing.HashAlgorithm.Murmur
+
   """
   @spec new() :: __MODULE__.t()
-  def new(), do: %__MODULE__{}
+  @spec new(keyword()) :: __MODULE__.t()
+  @spec new(term(), pos_integer) :: __MODULE__.t()
+  def new(opts_or_node \\ [])
+
+  def new([]), do: %__MODULE__{algorithm: HashRing.HashAlgorithm.Phash2}
+
+  def new(opts) when is_list(opts) do
+    algorithm = Keyword.get(opts, :algorithm, HashRing.HashAlgorithm.Phash2)
+    %__MODULE__{algorithm: algorithm}
+  end
+
+  def new(node), do: new(node, 128)
 
   @doc """
   Creates a new hash ring structure, seeded with the given node,
@@ -56,10 +79,18 @@ defmodule HashRing do
       ...> HashRing.key_to_node(ring, :foo)
       "a"
 
+      iex> ring = HashRing.new("a", 200, algorithm: HashRing.HashAlgorithm.Phash2)
+      ...> ring.algorithm
+      HashRing.HashAlgorithm.Phash2
+
   """
-  @spec new(term(), pos_integer) :: __MODULE__.t()
-  def new(node, weight \\ 128) when is_integer(weight) and weight > 0,
+  @spec new(term(), pos_integer()) :: __MODULE__.t()
+  @spec new(term(), pos_integer(), keyword()) :: __MODULE__.t()
+  def new(node, weight) when is_integer(weight) and weight > 0,
     do: add_node(new(), node, weight)
+
+  def new(node, weight, opts) when is_integer(weight) and weight > 0 and is_list(opts),
+    do: add_node(new(opts), node, weight)
 
   @doc """
   Returns the list of nodes which are present on the ring.
@@ -99,16 +130,17 @@ defmodule HashRing do
   def add_node(_, node, _weight) when is_binary(node) and byte_size(node) == 0,
     do: raise(ArgumentError, message: "Node keys cannot be empty strings")
 
-  def add_node(%__MODULE__{} = ring, node, weight) when is_integer(weight) and weight > 0 do
+  def add_node(%__MODULE__{algorithm: algorithm} = ring, node, weight) when is_integer(weight) and weight > 0 do
     cond do
       Enum.member?(ring.nodes, node) ->
         ring
 
       :else ->
         ring = %{ring | nodes: [node | ring.nodes]}
+        hash_range = algorithm.ring_size()
 
         Enum.reduce(1..weight, ring, fn i, %__MODULE__{ring: r} = acc ->
-          n = :erlang.phash2({node, i}, @hash_range)
+          n = algorithm.hash({node, i}, hash_range)
 
           try do
             %{acc | ring: :gb_trees.insert(n, node, r)}
@@ -202,8 +234,9 @@ defmodule HashRing do
   def key_to_node(ring, key) when is_atom(key),
     do: key_to_node(ring, :erlang.term_to_binary(key))
 
-  def key_to_node(%__MODULE__{ring: r}, key) do
-    hash = :erlang.phash2(key, @hash_range)
+  def key_to_node(%__MODULE__{ring: r, algorithm: algorithm}, key) do
+    hash_range = algorithm.ring_size()
+    hash = algorithm.hash(key, hash_range)
 
     case :gb_trees.iterator_from(hash, r) |> :gb_trees.next() do
       {_key, node, _} ->
@@ -240,8 +273,9 @@ defmodule HashRing do
   def key_to_nodes(%__MODULE__{nodes: []}, _key, _count),
     do: {:error, {:invalid_ring, :no_nodes}}
 
-  def key_to_nodes(%__MODULE__{nodes: nodes, ring: r}, key, count) do
-    hash = :erlang.phash2(key, @hash_range)
+  def key_to_nodes(%__MODULE__{nodes: nodes, ring: r, algorithm: algorithm}, key, count) do
+    hash_range = algorithm.ring_size()
+    hash = algorithm.hash(key, hash_range)
     count = min(length(nodes), count)
 
     case :gb_trees.iterator_from(hash, r) |> :gb_trees.next() do
