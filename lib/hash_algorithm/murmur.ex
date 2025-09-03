@@ -22,14 +22,7 @@ defmodule HashRing.HashAlgorithm.Murmur do
   @ring_size trunc(:math.pow(2, 32) - 1)
 
   @impl true
-  def hash(key, _range) do
-    # Convert atoms to binaries for better distribution (like phash2)
-    key = if is_atom(key), do: :erlang.term_to_binary(key), else: key
-
-    # Use MurmurHash3 x86_32 variant with seed 0
-    # This returns a 32-bit value which fits perfectly in our ring size
-    Murmur.hash_x86_32(key, 0)
-  end
+  def hash(key, _range), do: Murmur.hash_x86_32(key, 0)
 
   @impl true
   def ring_size() do
