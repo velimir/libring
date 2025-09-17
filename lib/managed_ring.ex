@@ -54,7 +54,8 @@ defmodule HashRing.Managed do
     :node_blacklist,
     :node_whitelist,
     :node_type,
-    :node_weight
+    :node_weight,
+    :on_ring_change
   ]
 
   @spec child_spec(child_spec_options) :: Supervisor.child_spec()
@@ -131,6 +132,8 @@ defmodule HashRing.Managed do
             :node_whitelist when is_list(value) -> false
             :node_type when value in [:all, :hidden, :visible] -> false
             :node_weight when is_integer(value) and value > 0 -> false
+            :on_ring_change when is_nil(value) -> false
+            :on_ring_change when is_tuple(value) and tuple_size(value) == 3 -> false
             _ -> true
           end
       end)
